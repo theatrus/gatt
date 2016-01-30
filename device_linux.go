@@ -30,7 +30,7 @@ type device struct {
 
 func NewDevice(opts ...Option) (Device, error) {
 	d := &device{
-		maxConn: 1,    // Support 1 connection at a time.
+		maxConn: 14,    // Support 1 connection at a time.
 		devID:   -1,   // Find an available HCI device.
 		chkLE:   true, // Check if the device supports LE.
 

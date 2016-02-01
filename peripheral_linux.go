@@ -113,6 +113,9 @@ func (p *peripheral) DiscoverCharacteristics(cs []UUID, s *Service) ([]*Characte
 		binary.LittleEndian.PutUint16(b[5:7], 0x2803)
 
 		b = p.sendReq(op, b)
+		if b == nil {
+			return nil, errors.New("Can' discover charactertistic - timeout")
+		}
 		if finish(op, start, b) {
 			break
 		}

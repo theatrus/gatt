@@ -434,6 +434,32 @@ func (c WriteClassOfDevice) Marshal(b []byte) { copy(b, c.ClassOfDevice[:]) }
 
 type WriteClassOfDevRP struct{ status uint8 }
 
+// Write Automatic Flush Timeout (0x0028)
+type WriteAutomaticFlushTimeout struct {
+	Handle uint16
+	FlushTimeout uint16
+}
+
+func (c WriteAutomaticFlushTimeout) Opcode() int { return opWriteAutomaticFlushTimeout }
+func (c WriteAutomaticFlushTimeout) Len() int { return 4 }
+func (c WriteAutomaticFlushTimeout) Marshal(b []byte) {
+	o.PutUint16(b[0:], c.Handle)
+	o.PutUint16(b[2:], c.FlushTimeout)
+}
+
+// Read Automatic Flush Timeout (0x0027)
+type ReadAutomaticFlushTimeout struct {
+	Handle uint16
+	FlushTimeout uint16
+}
+
+func (c ReadAutomaticFlushTimeout) Opcode() int { return opReadAutomaticFlushTimeout }
+func (c ReadAutomaticFlushTimeout) Len() int { return 4 }
+func (c ReadAutomaticFlushTimeout) Marshal(b []byte) {
+	o.PutUint16(b[0:], c.Handle)
+	o.PutUint16(b[2:], c.FlushTimeout)
+}
+
 // Write Host Buffer Size (0x0033)
 type HostBufferSize struct {
 	HostACLDataPacketLength            uint16

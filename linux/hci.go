@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/paypal/gatt/linux/cmd"
 	"github.com/paypal/gatt/linux/evt"
@@ -31,6 +32,8 @@ type HCI struct {
 
 	adv   bool
 	advmu *sync.Mutex
+
+	writeTimeout time.Duration
 }
 
 type bdaddr [6]byte
@@ -70,6 +73,8 @@ func NewHCI(devID int, chk bool, maxConn int) (*HCI, error) {
 		conns:   map[uint16]*conn{},
 
 		advmu: &sync.Mutex{},
+
+		writeTimeout: 2 * time.Second,
 	}
 
 	e.HandleEvent(evt.LEMeta, evt.HandlerFunc(h.handleLEMeta))
@@ -305,6 +310,12 @@ func (h *HCI) handleConnection(b []byte) {
 	h.conns[hh] = c
 	h.connsmu.Unlock()
 	h.setAdvertiseEnable(true)
+
+	// Update the flush timeout parameter on command writes
+	h.c.Send(cmd.WriteAutomaticFlushTimeout{Handle: hh,
+		FlushTimeout: uint16(float64(h.writeTimeout / time.Millisecond) / 0.625)})
+	h.c.Send(cmd.ReadAutomaticFlushTimeout{Handle: hh,
+		FlushTimeout: uint16(float64(h.writeTimeout / time.Millisecond) / 0.625)})
 
 	// FIXME: sloppiness. This call should be called by the package user once we
 	// flesh out the support of l2cap signaling packets (CID:0x0001,0x0005)

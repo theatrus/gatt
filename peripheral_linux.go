@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/paypal/gatt/linux"
 )
@@ -173,6 +174,9 @@ func (p *peripheral) DiscoverDescriptors(ds []UUID, c *Characteristic) ([]*Descr
 		binary.LittleEndian.PutUint16(b[3:5], c.endh)
 
 		b = p.sendReq(op, b)
+		if b == nil {
+			return nil, errors.New("Can't discover descriptors - timeout")
+		}
 		if finish(attOpFindInfoReq, start, b) {
 			break
 		}
@@ -212,6 +216,9 @@ func (p *peripheral) ReadCharacteristic(c *Characteristic) ([]byte, error) {
 	binary.LittleEndian.PutUint16(b[1:3], c.vh)
 
 	b = p.sendReq(op, b)
+	if b == nil {
+		return nil, errors.New("Can't read characteristic")
+	}
 	b = b[1:]
 	return b, nil
 }
@@ -240,6 +247,9 @@ func (p *peripheral) ReadLongCharacteristic(c *Characteristic) ([]byte, error) {
 		binary.LittleEndian.PutUint16(b[3:5], off)
 
 		b = p.sendReq(op, b)
+		if b == nil {
+			return nil, errors.New("Can't read long characteristic - timeout")
+		}
 		b = b[1:]
 		if len(b) == 0 {
 			break
@@ -268,7 +278,9 @@ func (p *peripheral) WriteCharacteristic(c *Characteristic, value []byte, noRsp 
 		return nil
 	}
 	b = p.sendReq(op, b)
-	// TODO: error handling
+	if b == nil {
+		return errors.New("Can't write characteristic - timeout")
+	}
 	b = b[1:]
 	return nil
 }
@@ -280,6 +292,9 @@ func (p *peripheral) ReadDescriptor(d *Descriptor) ([]byte, error) {
 	binary.LittleEndian.PutUint16(b[1:3], d.h)
 
 	b = p.sendReq(op, b)
+	if b == nil {
+		return nil, errors.New("Can't read descriptor - timeout")
+	}
 	b = b[1:]
 	// TODO: error handling
 	return b, nil
@@ -293,6 +308,9 @@ func (p *peripheral) WriteDescriptor(d *Descriptor, value []byte) error {
 	copy(b[3:], value)
 
 	b = p.sendReq(op, b)
+	if b == nil {
+		return errors.New("Can't write descriptor - timeout")
+	}
 	b = b[1:]
 	// TODO: error handling
 	return nil
@@ -315,6 +333,9 @@ func (p *peripheral) setNotifyValue(c *Characteristic, flag uint16,
 	binary.LittleEndian.PutUint16(b[3:5], ccc)
 
 	b = p.sendReq(op, b)
+	if b == nil {
+		return errors.New("Can't set notify - timeout")
+	}
 	b = b[1:]
 	// TODO: error handling
 	if f == nil {
@@ -374,18 +395,25 @@ func (p *peripheral) loop() {
 			select {
 			case req := <-p.reqc:
 				p.l2c.Write(req.b)
+				timeout := time.After(5 * time.Second)
 				if req.rspc == nil {
 					break
 				}
-				r := <-rspc
-				switch reqOp, rspOp := req.b[0], r[0]; {
-				case rspOp == attRspFor[reqOp]:
-				case rspOp == attOpError && r[1] == reqOp:
-				default:
-					log.Printf("Request 0x%02x got a mismatched response: 0x%02x", reqOp, rspOp)
-					// FIXME: terminate the connection?
+				select {
+				case r := <-rspc:
+					switch reqOp, rspOp := req.b[0], r[0]; {
+					case rspOp == attRspFor[reqOp]:
+					case rspOp == attOpError && r[1] == reqOp:
+					default:
+						log.Printf("Request 0x%02x got a mismatched response: 0x%02x", reqOp, rspOp)
+						// FIXME: terminate the connection?
+					}
+					req.rspc <- r
+				case <-timeout:
+					req.rspc <- nil
+					p.d.CancelConnection(p)
+					return
 				}
-				req.rspc <- r
 			case <-p.quitc:
 				return
 			}

@@ -1,6 +1,7 @@
 package gatt
 
 import (
+	"fmt"
 	"errors"
 	"log"
 )
@@ -77,7 +78,7 @@ type Advertisement struct {
 }
 
 // This is only used in Linux port.
-func (a *Advertisement) unmarshall(b []byte) error {
+func (a *Advertisement) unmarshall(b []byte) (err error) {
 
 	// Utility function for creating a list of uuids.
 	uuidList := func(u []UUID, d []byte, w int) []UUID {
@@ -87,13 +88,18 @@ func (a *Advertisement) unmarshall(b []byte) error {
 		}
 		return u
 	}
-
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+			err = errors.New("invalid advertise data")
+		}
+	}()
 	for len(b) > 0 {
 		if len(b) < 2 {
 			return errors.New("invalid advertise data")
 		}
 		l, t := b[0], b[1]
-		if len(b) < int(1+l) {
+		if len(b) < int(3+1+l) {
 			return errors.New("invalid advertise data")
 		}
 		d := b[2 : 1+l]
